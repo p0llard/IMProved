@@ -824,28 +824,41 @@ End ProgramChecks.
 
 Section Simulation.
   Definition state := VeryInefficientListMap.t * cmd : Set.
+  Variable V__T : state -> nat. (** Some function for extracting terminal valuations from a state. *)
+
   Inductive Done : state -> Prop := | DoneIntro : forall v, Done (v, Skip).
   Hint Constructors Done : core.
+
+  (** Formalisation differs slighly from presentation in from text:
+      we have a predicate over *states* not programs since our
+      language isn't deterministic, and the text defined this only
+      for deterministic systems. *)
+  Inductive M : state -> state -> Prop :=
+  | MIntro : forall s1 s2, Done s1 -> Done s1 -> V__T s1 = V__T s2 -> M s1 s2.
 
   Variable S1 S2 : state.
 
   Variable R : state -> state -> Prop.
 
   (** Pre-simulation *)
-  Hypothesis R_start : R S1 S2.
-  Hypothesis R_end : forall s1,
-        Done s1 ->
-        forall s2, R s1 s2 -> Done s2.
+  Hypothesis R__start : R S1 S2.
+  Hypothesis R__end : forall s1,
+     Done s1 ->
+     forall s2, R s1 s2 -> Done s2.
+
+  (** Suitability *)
+  Hypothesis R__suitable : forall s1 s2,
+     R s1 s2 -> M s1 s2.
 
   Section LockStep.
     Hypothesis lockstep_diagram : forall s1 s2,
-        R s1 s2 ->
-        forall s1', step s1 s1'
-               -> exists s2', step s2 s2' /\ R s1' s2'.
+     R s1 s2 ->
+     forall s1', step s1 s1'
+            -> exists s2', step s2 s2' /\ R s1' s2'.
 
     Lemma lockstep_sound' : forall S1 S1',
-          trc step S1 S1' ->
-          forall S2, R S1 S2 -> exists S2', trc step S2 S2' /\ R S1' S2'.
+       trc step S1 S1' ->
+       forall S2, R S1 S2 -> exists S2', trc step S2 S2' /\ R S1' S2'.
     Proof with eauto with trc.
       intros until S1'.
       induction 1; intros.
@@ -859,30 +872,39 @@ Section Simulation.
     Hint Resolve lockstep_sound' : core.
 
     Lemma lockstep_sound : forall S1',
-          trc step S1 S1' ->
-          exists S2', trc step S2 S2' /\ R S1' S2'.
+       trc step S1 S1' ->
+       exists S2', trc step S2 S2' /\ R S1' S2'.
     Proof. eauto. Qed.
 
     Lemma lockstep_finish : forall S1',
-          trc step S1 S1' -> Done S1' ->
-          exists S2', Done S2' /\ trc step S2 S2' /\ R S1' S2'.
+       trc step S1 S1' -> Done S1' ->
+       exists S2', Done S2' /\ trc step S2 S2' /\ R S1' S2'.
     Proof.
       intros. invert H0.
       pose proof (lockstep_sound H).
       simplify. eexists. simplify; eauto.
       eauto using DoneIntro.
     Qed.
+
+    Theorem lockstep_complete : forall S1',
+       trc step S1 S1' -> Done S1' ->
+       exists S2', trc step S2 S2' /\ M S1' S2'.
+    Proof with eauto.
+      intros.
+      pose proof (lockstep_finish H H0).
+      simplify...
+    Qed.
   End LockStep.
 
   Section Star.
     Hypothesis star_diagram : forall s1 s2,
-        R s1 s2 ->
-        forall s1', step s1 s1'
-               -> exists s2', trc step s2 s2' /\ R s1' s2'.
+     R s1 s2 ->
+     forall s1', step s1 s1'
+            -> exists s2', trc step s2 s2' /\ R s1' s2'.
 
     Lemma star_sound' : forall S1 S1',
-          trc step S1 S1' ->
-          forall S2, R S1 S2 -> exists S2', trc step S2 S2' /\ R S1' S2'.
+       trc step S1 S1' ->
+       forall S2, R S1 S2 -> exists S2', trc step S2 S2' /\ R S1' S2'.
     Proof with eauto with trc.
       intros until S1'.
       induction 1; intros.
@@ -896,18 +918,27 @@ Section Simulation.
     Hint Resolve star_sound' : core.
 
     Lemma star_sound : forall S1',
-          trc step S1 S1' ->
-          exists S2', trc step S2 S2' /\ R S1' S2'.
+       trc step S1 S1' ->
+       exists S2', trc step S2 S2' /\ R S1' S2'.
     Proof. eauto. Qed.
 
     Lemma star_finish : forall S1',
-          trc step S1 S1' -> Done S1' ->
-          exists S2', Done S2' /\ trc step S2 S2' /\ R S1' S2'.
+       trc step S1 S1' -> Done S1' ->
+       exists S2', Done S2' /\ trc step S2 S2' /\ R S1' S2'.
     Proof.
       intros. invert H0.
       pose proof (star_sound H).
       simplify. eexists. simplify; eauto.
       eauto using DoneIntro.
+    Qed.
+
+    Theorem star_complete : forall S1',
+       trc step S1 S1' -> Done S1' ->
+       exists S2', trc step S2 S2' /\ M S1' S2'.
+    Proof with eauto.
+      intros.
+      pose proof (star_finish H H0).
+      simplify...
     Qed.
   End Star.
 End Simulation.
